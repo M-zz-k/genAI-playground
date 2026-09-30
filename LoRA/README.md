@@ -78,3 +78,63 @@ Ensures only LoRA parameters are trainable, keeping the backbone frozen.
 Hugging Face library for metrics and evaluation.
 - Provides standard metrics like accuracy, F1, perplexity.
 - Integrates with Trainer for automatic evaluation during training.
+
+---
+
+# 📌 Checkpoint 2: Applying LoRA to BERT for Sequence Classification
+
+### 🔹 Goal
+Fine-tune a pre-trained BERT model using LoRA (Low-Rank Adaptation) for a multi-class text classification task.
+This checkpoint demonstrates how to prepare the dataset, tokenize inputs, and wrap the model with LoRA adapters.
+
+### 🔹 Dataset Preparation
+- **Dataset Choice:** Example → IMDb (sentiment analysis) or AG News (topic classification).
+
+**Preprocessing:**
+- Tokenize text with `AutoTokenizer`.
+- Apply truncation and padding (`max_length=128`).
+- Rename `label` → `labels` (required by Hugging Face models).
+- Format dataset into PyTorch tensors (`input_ids`, `attention_mask`, `labels`).
+
+👉 *This ensures the dataset is ready for training with BERT.*
+
+### 🔹 Model Setup
+```python
+model_name = "bert-base-uncased"
+model = AutoModelForSequenceClassification.from_pretrained(model_name, num_labels=6)
+```
+- Loads BERT (uncased) → ignores capitalization.
+- Adds a classification head for 6 labels (multi-class classification).
+- **Example:** News categories (World, Sports, Business, Sci/Tech, Entertainment, Politics).
+
+### 🔹 Applying LoRA
+```python
+lora_config = LoraConfig(
+    r=8,
+    lora_alpha=16,
+    target_modules=["query", "value"],
+    lora_dropout=0.1,
+    bias="none",
+    task_type="SEQ_CLS"
+)
+model = get_peft_model(model, lora_config)
+```
+**Explanation:**
+- `r=8` → Rank of low-rank matrices (controls trainable parameter size).
+- `lora_alpha=16` → Scaling factor for updates.
+- `target_modules=["query", "value"]` → LoRA applied only to attention layers (efficient adaptation).
+- `lora_dropout=0.1` → Prevents overfitting.
+- `task_type="SEQ_CLS"` → Sequence classification task.
+- `get_peft_model` → Wraps BERT with LoRA adapters so only LoRA parameters are trained.
+
+👉 *This makes fine-tuning lightweight and efficient.*
+
+### 🔹 Training Setup
+- **TrainingArguments** → Defines hyperparameters (learning rate, batch size, epochs).
+- **Trainer** → Handles training loop, evaluation, and saving checkpoints.
+- **Evaluate** → Provides metrics (accuracy, F1 score, etc.).
+
+### 🔹 Why This Matters
+- **Efficiency:** Only LoRA parameters are trained, not the full BERT model.
+- **Reusability:** Base model remains intact for other tasks.
+- **Portability:** LoRA weights are small and easy to share.
