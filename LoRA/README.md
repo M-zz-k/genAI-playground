@@ -138,3 +138,173 @@ model = get_peft_model(model, lora_config)
 - **Efficiency:** Only LoRA parameters are trained, not the full BERT model.
 - **Reusability:** Base model remains intact for other tasks.
 - **Portability:** LoRA weights are small and easy to share.
+
+---
+
+# 📌 Checkpoint 3: Training the Model with LoRA
+
+### 🔹 Goal
+Fine-tune only the LoRA layers of BERT using Hugging Face's Trainer API.
+We keep training lightweight and efficient by updating only LoRA parameters.
+
+### 🔹 Training Setup
+- **Batch size = 8** → Small batch size to fit into limited GPU memory.
+- **Learning rate = 2e-4** → Slightly higher since only LoRA layers are trained.
+- **Epochs = 2** → Short training for demonstration; more epochs improve accuracy.
+
+### 🔹 Metrics
+```python
+metric = evaluate.load("accuracy")
+
+def compute_metrics(eval_pred):
+    logits, labels = eval_pred
+    preds = logits.argmax(axis=-1)
+    return metric.compute(predictions=preds, references=labels)
+```
+- `evaluate.load("accuracy")` → Loads accuracy metric.
+- `compute_metrics` → Converts model outputs (logits) into predicted labels and compares with ground truth.
+
+Ensures evaluation is automatic during training.
+
+### 🔹 TrainingArguments
+```python
+args = TrainingArguments(
+    output_dir="./lora_emotion",
+    per_device_train_batch_size=8,
+    per_device_eval_batch_size=8,
+    learning_rate=2e-4,
+    num_train_epochs=2,    
+    eval_strategy="epoch",
+    logging_steps=10,
+    report_to="none"
+)
+```
+**Key Parameters:**
+- `output_dir` → Where checkpoints and logs are saved.
+- `per_device_train_batch_size` → Training batch size per GPU.
+- `per_device_eval_batch_size` → Evaluation batch size.
+- `learning_rate` → Controls update speed of LoRA parameters.
+- `num_train_epochs` → Number of passes over dataset.
+- `eval_strategy="epoch"` → Evaluate after each epoch.
+- `logging_steps=10` → Log progress every 10 steps.
+- `report_to="none"` → Disables external logging (e.g., WandB).
+
+### 🔹 Trainer
+```python
+trainer = Trainer(
+    model=model,
+    args=args,
+    train_dataset=dataset["train"],
+    eval_dataset=dataset["validation"],
+    compute_metrics=compute_metrics
+)
+trainer.train()
+```
+- **Trainer** → High-level API that handles training loop, evaluation, and logging.
+- `train_dataset` → Training split.
+- `eval_dataset` → Validation split.
+- `compute_metrics` → Evaluates accuracy after each epoch.
+- `trainer.train()` → Starts fine-tuning process.
+
+### 🔹 Saving the Adapter
+```python
+model.save_pretrained("./lora_emotion_adapter")
+print("LoRA fine-tuning complete! Adapter saved at ./lora_emotion_adapter")
+```
+- Saves only LoRA adapter weights, not the full BERT model.
+- Adapter can be reloaded later on top of the base model.
+- Lightweight and portable for sharing or deployment.
+
+### 🔹 Output & Results
+**Example run:** Accuracy ≈ 54% after 2 epochs on a small subset.
+
+Low accuracy is expected because:
+- Few epochs.
+- Small dataset subset.
+
+**For better performance:**
+- Train longer (5–10 epochs).
+- Use full dataset.
+- Tune hyperparameters.
+
+---
+
+# 📌 Checkpoint 4: Testing the Model on Custom Sentences
+
+### 🔹 Goal
+Verify that the LoRA-fine-tuned BERT model works correctly by running it on custom sentences.
+This confirms that the LoRA adapter is applied and the model can classify emotions.
+
+### 🔹 Device Setup
+```python
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model.to(device)
+```
+- Uses GPU (CUDA) if available, otherwise falls back to CPU.
+- Moves the model to the chosen device for inference.
+
+### 🔹 Emotion Labels
+```python
+emotion_labels = dataset["train"].features["labels"].names
+```
+- Retrieves the class names from the dataset.
+- **Example:** `["joy", "fear", "surprise", "sadness", "love", "anger"]`.
+
+### 🔹 Sample Sentences
+```python
+samples = [
+    "I am so happy to see you!",
+    "This is terrifying, I can't handle it.",
+    "He surprised everyone with his gift.",
+    "I feel so sad and lonely.",
+    "I love spending time with my family."
+]
+```
+- Custom test inputs to check model predictions.
+- Covers different emotions: joy, fear, surprise, sadness, love.
+
+### 🔹 Tokenization
+```python
+inputs = tokenizer(samples, truncation=True, padding=True, return_tensors="pt").to(device)
+```
+- Converts sentences into token IDs and attention masks.
+- Pads/truncates to uniform length.
+- Returns PyTorch tensors ready for inference.
+
+### 🔹 Model Inference
+```python
+model.eval()
+with torch.no_grad():
+    logits = model(**inputs).logits
+    preds = torch.argmax(logits, dim=-1)
+```
+- `model.eval()` → Sets model to evaluation mode (no dropout).
+- `torch.no_grad()` → Disables gradient tracking (faster inference).
+- `logits` → Raw model outputs (unnormalized scores).
+- `torch.argmax` → Picks the highest-scoring label for each sentence.
+
+### 🔹 Display Predictions
+```python
+for text, pred in zip(samples, preds):
+    print(f"Text: {text}\nPredicted Emotion: {emotion_labels[pred]}\n")
+```
+Loops through sentences and prints predicted emotion.
+
+**Example output:**
+```text
+Text: I am so happy to see you!
+Predicted Emotion: joy
+```
+
+### 🔹 Output & Results
+**Example run:** Accuracy may be modest (~54%) because:
+- Trained only for 2 epochs.
+- Used a small subset of dataset.
+
+**For better performance:**
+- Train longer (5–10 epochs).
+- Use full dataset.
+- Tune hyperparameters.
+
+✅ **Checkpoint 4 Takeaway:**
+You can now test your LoRA-fine-tuned model on custom sentences. This confirms the adapter works, the pipeline is complete, and you can showcase results in your portfolio.
