@@ -1,3 +1,17 @@
+### Quantized Low-Rank Adaptation (QLoRA)
+
+This project uses **QLoRA (Quantized Low-Rank Adaptation)** to fine-tune a pre-trained BERT model. QLoRA is an extension of LoRA that drastically reduces memory usage by quantizing the frozen pre-trained weights to 4-bit precision, while keeping the trainable LoRA adapters in higher precision (e.g., 16-bit float).
+
+Mathematically, the standard LoRA forward pass $Y = X(W + \frac{\alpha}{r}BA)$ is modified by quantizing the base weights $W$ into a specialized 4-bit NormalFloat (NF4) format:
+
+$$
+Y = X(W_{\text{NF4}} + \frac{\alpha}{r}BA)
+$$
+
+During the backward pass, gradients are computed through the 4-bit weights and only applied to the small, 16-bit adapter matrices $A$ and $B$. This allows us to train massive models on consumer hardware without sacrificing performance.
+
+---
+
 # 📌 Checkpoint 1: Foundations for QLoRA Fine-Tuning
 
 ### 🔹 What is QLoRA?
@@ -34,7 +48,8 @@ bnb_config = BitsAndBytesConfig(
     load_in_4bit=True,
     bnb_4bit_compute_dtype=torch.float16,
     bnb_4bit_use_double_quant=True,
-    bnb_4bit_quant_type="nf4"
+    bnb_4bit_quant_type="nf4",
+    llm_int8_skip_modules=["classifier"]
 )
 
 model = AutoModelForSequenceClassification.from_pretrained(
@@ -49,20 +64,26 @@ model = AutoModelForSequenceClassification.from_pretrained(
 - `bnb_4bit_compute_dtype=torch.float16` → Computations occur in fp16 for speed and stability.
 - `bnb_4bit_quant_type="nf4"` → Optimal data type for weights.
 - `device_map="auto"` → Automatically places model layers on available GPUs.
+- `llm_int8_skip_modules=["classifier"]` → Prevents the randomly initialized classifier head from being quantized to 4-bit, which would cause shape mismatches and crashes during training.
 
 ### 🔹 Applying LoRA on top of QLoRA
 ```python
+from peft import prepare_model_for_kbit_training
+
 qlora_adapter_config = LoraConfig(
     r=8,
     lora_alpha=16,
     target_modules=["query", "value"],
     lora_dropout=0.1,
     bias="none",
-    task_type="SEQ_CLS"
+    task_type="SEQ_CLS",
+    modules_to_save=["classifier"]
 )
+
+model = prepare_model_for_kbit_training(model)
 model = get_peft_model(model, qlora_adapter_config)
 ```
-👉 *This leaves the base model frozen in 4-bit, while the LoRA adapters are injected and set as trainable.*
+👉 *This leaves the base model frozen in 4-bit. We use `prepare_model_for_kbit_training` to prep the quantized model for gradients, and `modules_to_save=["classifier"]` to ensure the classification head is trained in full precision alongside the LoRA adapters.*
 
 ---
 
