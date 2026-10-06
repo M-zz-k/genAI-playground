@@ -1,3 +1,21 @@
+### Low-Rank Adaptation (LoRA)
+
+This project uses **LoRA (Low-Rank Adaptation)** to fine-tune a pretrained BERT model for **emotion classification** without updating all of BERT's parameters.
+
+LoRA keeps the original BERT weights **frozen** and adds small trainable low-rank matrices to selected attention layers. In this implementation, LoRA is applied to the **Query and Value** projections using `r=8` and `lora_alpha=16`. Instead of directly learning a large weight update, LoRA represents it as a product of smaller matrices:
+
+$$
+W' = W + \frac{\alpha}{r}BA
+$$
+
+where `r` controls the rank/capacity of the adapter and `alpha` controls the scaling of the LoRA update.
+
+During training, **only the LoRA parameters are updated**, significantly reducing the number of trainable parameters, memory usage, and computational cost compared with full fine-tuning. The adapted model is then evaluated on unseen test data using classification metrics such as **accuracy, precision, recall, and F1-score** to verify that the model retains good performance while being parameter-efficient.
+
+**In short:** LoRA adapts a large pretrained model by **freezing the original model and training a small task-specific adapter**, providing an efficient alternative to full fine-tuning.
+
+---
+
 # 📌 Checkpoint 1: Foundations for LoRA Fine-Tuning
 
 ### 🔹 Hugging Face
